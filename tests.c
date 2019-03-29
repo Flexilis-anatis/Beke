@@ -1,5 +1,6 @@
 #include "tests.h"
 #include "chunk.h"
+#include <stdio.h>
 
 const TestFn test_fns[] = {
     test_byte_manip,
@@ -34,12 +35,31 @@ char *test_byte_manip(void) {
         instr.arg == ARG2;
 
     if (!get_byte_works) {
-        return "get_byte(1) failed";
+        return "get_byte(1) or add_byte(1) failed";
     } else if (!get_arg_works) {
-        return "get_arg(1) failed";
+        return "get_arg(1) or add_arg(1) failed";
     } else if (!get_instr_works) {
-        return "get_instr(1) failed";
+        return "get_instr(1) or add_instr(1) failed";
     } else {
         return NULL;
     }
+}
+
+bool run_tests(void) {
+    int tests = 0, passed = 0;
+
+    TestFn fn = test_fns[0];
+    while (fn) {
+        char *result = fn();
+        if (result) {
+            printf("%s\n", result);
+        } else {
+            ++passed;
+        }
+
+        fn = test_fns[++tests];
+    }
+
+    printf("%d/%d tests passed\n", passed, tests);
+    return passed == tests;
 }
