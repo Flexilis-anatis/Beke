@@ -1,5 +1,4 @@
 #include "scanner.h"
-#include "vec/vector.h"
 #include <string.h>
 
 Source init_source(const char *source) {

@@ -1,23 +1,56 @@
 #include "tests.h"
 #include "chunk.h"
 #include "scanner.h"
-#include <stdio.h>
+#include "bceval.h"
 
 const TestFn test_fns[] = {
     test_byte_manip,
     test_next_token,
     test_token_manip,
+    test_arithmatic,
     NULL
 };
 
-char *test_byte_manip(void) {
+bool run_tests(void) {
+    int tests = 0, passed = 0;
+
+    TestFn fn = test_fns[0];
+    while (fn) {
+        passed += fn();
+        fn = test_fns[++tests];
+    }
+
+    printf("%d/%d tests passed\n", passed, tests);
+    return passed == tests;
+}
+
+#define FAIL(msg) \
+    do {                              \
+        fprintf(stderr, "%s\n", msg); \
+        return false;                 \
+    } while (0)
+
+#define FAILF(msg, ...) \
+    do {                                        \
+        fprintf(stderr, msg "\n", __VA_ARGS__); \
+        return false;                           \
+    } while (0)
+
+
+#define CHUNKFAIL(g, c) \
+    if (g) {  \
+        free_chunk(chunk);                \
+        c                                 \
+    }
+
+bool test_byte_manip(void) {
     Chunk *chunk = empty_chunk();
 
     const uint8_t BYTE1 = 123;
     const uint8_t BYTE2 = 53;
     const uint16_t ARG1 = 483;
-    const uint8_t OP = 13;
-    const uint16_t ARG2 = 1780;
+    const uint8_t OP = 14;
+    const uint16_t ARG2 = 3456;
 
     add_byte(chunk, BYTE1);
     add_byte(chunk, BYTE2);
@@ -26,52 +59,53 @@ char *test_byte_manip(void) {
 
     uint8_t *ip = chunk->code;
 
-    bool get_byte_works =
-        get_byte(&ip) == BYTE1 &&
-        get_byte(&ip) == BYTE2;
+    int capture;
 
-    bool get_arg_works = get_arg(&ip) == ARG1;
+    CHUNKFAIL((capture = get_byte(&ip)) == BYTE1,
+        FAILF("get_byte(1) failed: expected %d, got %d", BYTE1, capture);)
 
-    Instr instr = get_instr(&ip);
-    bool get_instr_works =
-        instr.op == OP &&
-        instr.arg == ARG2;
+    CHUNKFAIL((capture = get_byte(&ip)) != BYTE2,
+        FAILF("get_byte(1) failed: expected %d, got %d", BYTE2, capture);)
 
-    if (!get_byte_works) {
-        return "get_byte(1) or add_byte(1) failed";
-    } else if (!get_arg_works) {
-        return "get_arg(1) or add_arg(1) failed";
-    } else if (!get_instr_works) {
-        return "get_instr(1) or add_instr(1) failed";
-    } else {
-        return NULL;
-    }
+    CHUNKFAIL((capture = get_arg(&ip)) != ARG1,
+        FAILF("get_arg(1) failed: expected %d, got %d", ARG1, capture);)
+
+    CHUNKFAIL((capture = get_byte(&ip)) != OP,
+        FAILF("get_byte(1) failed: expected %d, got %d", OP, capture);)
+
+    CHUNKFAIL((capture = get_arg(&ip)) != ARG2,
+        FAILF("get_arg(1) failed: expected %d, got %d", ARG2, capture);)
+
+    free_chunk(chunk);
+    return true;
 }
 
-char *test_next_token(void) {
+#define TEST(tok) \
+    if ((capture = next_token(&source).id) != TOK_##tok) \
+        FAILF("Expected TOK_" #tok " (value %d) got value %d", TOK_##tok, capture);
+
+bool test_next_token(void) {
     Source source = init_source("fn: fn : ident {= } -> fn name : 53 ->");
-    bool passed =
-        next_token(&source).id == TOK_ANON_FN &&
-        next_token(&source).id == TOK_ANON_FN &&
-        next_token(&source).id == TOK_IDENT &&
-        next_token(&source).id == TOK_LBRACE &&
-        next_token(&source).id == TOK_ASSIGN &&
-        next_token(&source).id == TOK_RBRACE &&
-        next_token(&source).id == TOK_ARROW &&
-        next_token(&source).id == TOK_FN &&
-        next_token(&source).id == TOK_IDENT &&
-        next_token(&source).id == TOK_COLON &&
-        next_token(&source).id == TOK_NUMBER &&
-        next_token(&source).id == TOK_ARROW &&
-        next_token(&source).id == TOK_EOF &&
-        next_token(&source).id == TOK_EOF;
+    int capture;
 
-    if (!passed)
-        return "next_token(1) failed";
-    return NULL;
+    TEST(ANON_FN);
+    TEST(ANON_FN);
+    TEST(IDENT);
+    TEST(LBRACE);
+    TEST(ASSIGN);
+    TEST(RBRACE);
+    TEST(ARROW);
+    TEST(FN);
+    TEST(IDENT);
+    TEST(COLON);
+    TEST(NUMBER);
+    TEST(ARROW);
+
+    return true;
 }
+#undef TEST
 
-char *test_token_manip(void) {
+bool test_token_manip(void) {
     Source source = init_source("1 t : ; } { -");
     bool passed =
         next_token(&source).id == TOK_NUMBER &&
@@ -90,25 +124,33 @@ char *test_token_manip(void) {
               match_token(&source, TOK_MINUS);
 
     if (!passed)
-        return "Token manipulation functions failed";
-    return NULL;
+        FAIL("Token manipulation functions failed");
+    return true;
 }
 
-bool run_tests(void) {
-    int tests = 0, passed = 0;
+bool test_arithmatic(void) {
+    const double value = 3.5 / 7.1 * 9.0 - 2.2;
 
-    TestFn fn = test_fns[tests];
-    while (fn) {
-        char *result = fn();
-        if (result) {
-            printf("%s\n", result);
-        } else {
-            ++passed;
-        }
+    Chunk *chunk = empty_chunk();
+    add_instr_const(chunk, OP_PUSH, val_d(3.5));
+    add_instr_const(chunk, OP_PUSH, val_d(7.1));
+    add_byte(chunk,        OP_DIV);
+    add_instr_const(chunk, OP_PUSH, val_d(9));
+    add_byte(chunk,        OP_MUL);
+    add_instr_const(chunk, OP_PUSH, val_d(2.2));
+    add_byte(chunk,        OP_SUB);
 
-        fn = test_fns[++tests];
-    }
+    StatVal ret = eval(chunk);
+    Status status = ret.stat;
+    Value result = ret.ret;
 
-    printf("%d/%d tests passed\n", passed, tests);
-    return passed == tests;
+    CHUNKFAIL(status == ST_ERR,
+        FAILF("Error occured during arithmatic test: '%s'", BCError.message);)
+
+    CHUNKFAIL(result.f != value,
+        FAILF("Arithmatic failed; expected %e, got %e", value, result.f);)
+
+    free_chunk(chunk);
+
+    return true;
 }

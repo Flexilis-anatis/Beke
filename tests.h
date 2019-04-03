@@ -1,12 +1,12 @@
 #pragma once
-#include <stdbool.h>
-#include <stddef.h>
+#include "common.h"
 
-typedef char *(*TestFn)(void);
+typedef bool (*TestFn)(void);
 
 // Individual tests and a full test both available; may add tests by section
 // in the future
-char *test_byte_manip(void);
-char *test_next_token(void);
-char *test_token_manip(void);
+bool test_byte_manip(void);
+bool test_next_token(void);
+bool test_token_manip(void);
+bool test_arithmatic(void);
 bool run_tests(void);

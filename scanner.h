@@ -1,6 +1,6 @@
 #pragma once
 #include "token.h"
-#include <stdbool.h>
+#include "common.h"
 
 typedef struct {
     Token last;
