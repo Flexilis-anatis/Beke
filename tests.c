@@ -2,12 +2,15 @@
 #include "chunk.h"
 #include "scanner.h"
 #include "bceval.h"
+#include "comp.h"
+#include "dis.h"
 
 const TestFn test_fns[] = {
     test_byte_manip,
     test_next_token,
     test_token_manip,
     test_arithmatic,
+    test_comp_arith,
     NULL
 };
 
@@ -61,7 +64,7 @@ bool test_byte_manip(void) {
 
     int capture;
 
-    CHUNKFAIL((capture = get_byte(&ip)) == BYTE1,
+    CHUNKFAIL((capture = get_byte(&ip)) != BYTE1,
         FAILF("get_byte(1) failed: expected %d, got %d", BYTE1, capture);)
 
     CHUNKFAIL((capture = get_byte(&ip)) != BYTE2,
@@ -115,7 +118,9 @@ bool test_token_manip(void) {
 
     consume(&source);
     passed &= next_token(&source).id == TOK_COLON &&
-              peek_token(&source).id == TOK_SEMICOLON;
+              peek_token(&source).id == TOK_SEMICOLON &&
+              last_token(&source).id == TOK_IDENT &&
+              cur_token(&source).id == TOK_COLON;
 
     consume(&source);
     passed &= peek_token(&source).id == TOK_RBRACE;
@@ -140,16 +145,24 @@ bool test_arithmatic(void) {
     add_instr_const(chunk, OP_PUSH, val_d(2.2));
     add_byte(chunk,        OP_SUB);
 
-    StatVal ret = eval(chunk);
-    Status status = ret.stat;
-    Value result = ret.ret;
+    Value ret_val;
+    Status status = eval(chunk, &ret_val);
 
     CHUNKFAIL(status == ST_ERR,
         FAILF("Error occured during arithmatic test: '%s'", BCError.message);)
 
-    CHUNKFAIL(result.f != value,
-        FAILF("Arithmatic failed; expected %e, got %e", value, result.f);)
+    CHUNKFAIL(ret_val.num != value,
+        FAILF("Arithmatic failed; expected %e, got %e", value, ret_val.num);)
 
+    free_chunk(chunk);
+
+    return true;
+}
+
+bool test_comp_arith(void) {
+    Source source = init_source("1 + 5 * 3 + 1 * (3 + 2) + 1");
+    Chunk *chunk = compile(&source);
+    dis(chunk);
     free_chunk(chunk);
 
     return true;

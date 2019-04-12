@@ -56,6 +56,11 @@ static Token parse_other(Source *source) {
         CASE(':', COLON);
         CASE('{', LBRACE);
         CASE('}', RBRACE);
+        CASE('(', LPAREN);
+        CASE(')', RPAREN);
+        CASE('+', PLUS);
+        CASE('*', STAR);
+        CASE('/', SLASH);
         case '=':
             return token(TOK_ASSIGN, source);
         case '-':
@@ -70,6 +75,23 @@ static Token parse_other(Source *source) {
 }
 #undef CASE
 
+static Token parse_string(Source *source) {
+    while (*source->end != '\0' && *source->end != '"')
+        ++source->end;
+
+    if (*source->end == '\0') {
+        // Still working on error system. Won't last forever
+        fprintf(stderr, "Unmatched string\n");
+        exit(1);
+    }
+
+    ++source->start;
+    --source->end;
+    Token tok = token(TOK_STRING, source);
+    ++source->end;
+    return tok;
+}
+
 static Token get_next_token(Source *source) {
     source->start = source->end;
 
@@ -83,16 +105,19 @@ static Token get_next_token(Source *source) {
 
     if (ISDIGIT(*source->end))
         return parse_number(source);
+    else if (*source->end == '"')
+        return parse_string(source);
     return parse_other(source);
 }
 
-// This is where the peeking happens
+// This is where the peek filtration happens
 Token next_token_peek_filter(Source *source) {
     if (source->peeked) {
         consume(source);
         return source->last;
     }
-    return source->last = get_next_token(source);
+    source->prev = source->last;
+    return source->cur = source->last = get_next_token(source);
 }
 
 // Filters out fn: from fn IDENT:. Just convenient
@@ -107,9 +132,21 @@ Token next_token(Source *source) {
 }
 
 Token peek_token(Source *source) {
+    Token prev = source->prev,
+          cur = source->cur;
     Token token = next_token(source);
+    source->prev = prev;
+    source->cur = cur;
     source->peeked = true;
     return token;
+}
+
+Token last_token(Source *source) {
+    return source->prev;
+}
+
+Token cur_token(Source *source) {
+    return source->cur;
 }
 
 void consume(Source *source) {

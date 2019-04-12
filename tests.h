@@ -9,4 +9,5 @@ bool test_byte_manip(void);
 bool test_next_token(void);
 bool test_token_manip(void);
 bool test_arithmatic(void);
+bool test_comp_arith(void);
 bool run_tests(void);
